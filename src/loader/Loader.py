@@ -69,6 +69,7 @@ class Loader(AbstractLoader):
     >>> 'dd'
     """
     def __init__(self, path: str='/usr/xtmp/mimic2023/mimic3', mode: str='pd') -> None:
+        assert type(path) == str, 'invalid path'
         self.path = path
         self.cur_mode = mode
     
@@ -95,6 +96,4 @@ class Loader(AbstractLoader):
         self.cur_mode = mode
 
 if __name__ == '__main__':
-    # EXAMPLES
-    loader = Loader()
-    print(loader['OASIS'])
+    pass
