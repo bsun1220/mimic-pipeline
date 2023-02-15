@@ -127,3 +127,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Tony's trash that should not be pushed
+jupyter.sh
