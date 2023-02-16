@@ -1,13 +1,14 @@
 '''
-for storing models that need to be implemented and trained (to make things consistent between
-different libraries, packages...etc)
+For models that need to be tuned and trained (to make our work flow consistent), mostly writing 
+wrappers for models so that we can just  do train(), predict() and predict_proba() on all 
+of them in the pipeline. This may seem trivial, but it really isn't.
 '''
 from abc import ABC, abstractmethod
 from fasterrisk.fasterrisk import RiskScoreOptimizer, RiskScoreClassifier
 import numpy as np
 
 class Model(ABC):
-    
+    '''Abstract class that's the parent of all other classes'''
     def __init__(self, ModelHyperparams: dict):
         ...
         pass
@@ -28,9 +29,29 @@ class FastSparse(Model):
 
 
 class FasterRisk(Model):
+    """
+    Wrapper for FasterRisk: https://arxiv.org/pdf/2210.05846.pdf
+
+    Parameters
+    ----------
+    ModelHyperparams : dict
+        dictionary containing the hyper-parameter names as keys and their corresponding values as items
+    verbose : bool, optional
+        whether prints out number of models after training, by default False
     
+    Usage
+    -----
+    >>> model = FasterRisk()
+    >>> model.train(X, y)
+    >>> y_pred = model.predict(X)
+    >>> y_prob = model.predict_proba(X)
+    >>> # to get risk score cards (see Cynthia's paper)
+    >>> model.print_model_card()
+    >>> # print top K score cards
+    >>> model.print_topK_model_cards(feature_names=df.columns, X_train, y_train,
+                                    X_test, y_test, K)
+    """
     def __init__(self, ModelHyperparams, verbose: bool=False):
-        super().__init__(ModelHyperparams)
         self.optimizer = RiskScoreOptimizer
         self.ModelHyperparams = ModelHyperparams
         self.classifier = None
@@ -41,7 +62,7 @@ class FasterRisk(Model):
         self.verbose = verbose
         
     
-    def train(self, X, y):
+    def train(self, X: np.ndarray, y: np.ndarray):
         assert not self.trained, 'model already trained'
         dict = self.ModelHyperparams
         # initialzie optimizer, if parameter is None, use default value
