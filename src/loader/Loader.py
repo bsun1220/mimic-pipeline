@@ -1,6 +1,4 @@
 """
-Author: Tony
-Date: 02/12/2023
 helper for loading datasets
 """
 import pandas as pd
@@ -30,7 +28,7 @@ def dd_load(path, args):
 METHODS['dd'] = dd_load
 
 def oasis_load(path, args):
-    return pd.read_pickle(path)
+    return pd.read_csv(path)
 
 METHODS['oasis'] = oasis_load
 # -----------------------------------------------------------------------------------------
@@ -77,7 +75,7 @@ class Loader(AbstractLoader):
     def __getitem__(self, *args):
         if args[0] == 'OASIS':
             func = METHODS['oasis']
-            result = func('/usr/xtmp/mimic2023/mimic3/oasis_df.pkl', args)
+            result = func('/usr/xtmp/mimic2023/mimic3/oasis.csv', args)
         else:
             func = METHODS[self.cur_mode]   # get right function according to current mode
             result = func(self.path, args)
