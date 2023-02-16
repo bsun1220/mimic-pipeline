@@ -5,6 +5,7 @@ of them in the pipeline. This may seem trivial, but it really isn't.
 '''
 from abc import ABC, abstractmethod
 from fasterrisk.fasterrisk import RiskScoreOptimizer, RiskScoreClassifier
+from interpret.glassbox import ExplainableBoostingClassifier
 import numpy as np
 
 class Model(ABC):
@@ -149,9 +150,23 @@ class FasterRisk(Model):
 
 class EBM(Model):
     
-    def __init__(self, ModelHyperparams):
+    def __init__(self, ModelHyperparams, verbose: bool=False):
         super().__init__(ModelHyperparams)
-
+        self.clf = ExplainableBoostingClassifier(**ModelHyperParams)
+        self.ModelHyperparams = ModelHyperparams
+    
+    def train(self, X: np.ndarray, y: np.ndarray):
+        assert not self.trained, 'model already trained'
+        self.clf.fit(X,y)
+        self.trained = True
+    
+    def predict(self, X: np.ndarray):
+        assert self.trained, 'model not trained yet'
+        return self.clf.predict(X)
+    
+    def predict_proba(self, X: np.ndarray):
+        assert self.trained, 'model not trained yet'
+        return self.clf.predict_proba(X)[::,1]
 
 if __name__ == "__main__":
     pass
