@@ -16,6 +16,19 @@ SEED = 474      # use this global seed for any randomness
 
 # ----------------------------------------- HELPERS -----------------------------------------
 def get_config(path: str):
+    """
+    To obtain config from .yaml file stored in params
+
+    Parameters
+    ----------
+    path : str
+        path storing .yaml file of interest
+
+    Returns
+    -------
+    dict
+        .yaml file parsed as dictionary
+    """
     with open(path, 'r') as stream:
         config = yaml.load(stream, yaml.FullLoader)
     return config
@@ -52,7 +65,7 @@ class AbstractTuner(ABC):
         pass
         
     @abstractmethod
-    def tune(self):
+    def tune(self, X: np.ndarray, y: np.ndarray):
         '''
         Used to tune a specifc model (according to the child class) using Weights & Biases
         '''
@@ -62,7 +75,24 @@ class AbstractTuner(ABC):
 class FasterRiskTuner(AbstractTuner):
     
     def __init__(self, config: dict, KF: bool, K: int=10, test: float = 0.25, entity: str = 'dukeds-mimic2023'):
-        super().__init__(config, KF, K, test, entity)
+        """
+        Hyper-parameter tuning class (Tuner) for FasterRisk
+
+        Parameters
+        ----------
+        config : dict
+            dictionary containing the hyper-parameters to be tuned, stored in format readable by wandb:
+            https://docs.wandb.ai/guides/sweeps/define-sweep-configuration
+        KF : bool
+            to indicate whether doing KFold when doing hyper-parameter tuning
+        K : int, optional
+            number of folds to do if KF is True, by default 10
+        test : float, optional
+            proportion of test data, by default 0.25
+        entity : str, optional
+            name of the user or team for logging results in wandb, by default 'dukeds-mimic2023'
+        """
+        
         wandb.init(
             entity=entity,
             project=config['project'],
@@ -86,7 +116,7 @@ class FasterRiskTuner(AbstractTuner):
         self.K = K
         self.test = test
     
-    def tune(self, X, y):
+    def tune(self, X: np.ndarray, y: np.ndarray):
         if self.KF == True:
             f1_arr, auc_arr = [], []
             kf = KFold(n_splits=self.K, shuffle=True, random_state=SEED)
