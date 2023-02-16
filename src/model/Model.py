@@ -1,17 +1,137 @@
-
+'''
+for storing models that need to be implemented and trained (to make things consistent between
+different libraries, packages...etc)
+'''
 from abc import ABC, abstractmethod
+from fasterrisk.fasterrisk import RiskScoreOptimizer, RiskScoreClassifier
+import numpy as np
 
 class Model(ABC):
     
-    def __init__(self, ModelHyperparams):
+    def __init__(self, ModelHyperparams: dict):
         ...
         pass
     
     @abstractmethod
-    def train(X, y):
+    def train(self, X, y):
         pass
     
     @abstractmethod
-    def predict_proba():
+    def predict_proba(self):
         pass
+
+
+class FastSparse(Model):
+    
+    def __init__(self, ModelHyperparams):
+        super().__init__(ModelHyperparams)
+
+
+class FasterRisk(Model):
+    
+    def __init__(self, ModelHyperparams, verbose: bool=False):
+        super().__init__(ModelHyperparams)
+        self.optimizer = RiskScoreOptimizer
+        self.ModelHyperparams = ModelHyperparams
+        self.classifier = None
+        self.multipliers = None
+        self.beta0 = None
+        self.betas = None
+        self.trained = False
+        self.verbose = verbose
+        
+    
+    def train(self, X, y):
+        assert not self.trained, 'model already trained'
+        dict = self.ModelHyperparams
+        # initialzie optimizer, if parameter is None, use default value
+        # NOTE: variable that comes after or is the default value
+        for key in dict.keys():     # NOTE: this step is to deal with the fact that wandb doesn't allow null
+            if dict[key] == 'None':
+                dict[key] = None
+        
+        opt = self.optimizer(
+            X=X, 
+            y=y, 
+            k=dict['k'],
+            select_top_m=dict['select_top_m'] or 50,
+            lb=dict['lb'] or -5,
+            ub=dict['ub'] or 5,
+            gap_tolerance=dict['gap_tolerance'] or 0.05,
+            parent_size=dict['parent_size'] or 10,
+            child_size=dict['child_size'] or None,
+            maxAttempts=dict['maxAttempts'] or 50,
+            num_ray_search=dict['num_ray_search'] or 20,
+            lineSearch_early_stop_tolerance=dict['lineSearch_early_stop_tolerance'] or 0.001,
+            )
+        
+        opt.optimize()      # train
+        self.multipliers, self.beta0, self.betas = opt.get_models()     # obtain trained coefficients
+        if self.verbose == True:
+            print(f"Number of risk score models: {len(self.multipliers)}")
+        self.trained = True
+
+    
+    def predict_proba(self, X: np.ndarray, model_idx: int=0):
+        assert self.trained, 'model not trained yet'
+        multiplier = self.multipliers[model_idx]
+        beta0 = self.beta0[model_idx]
+        betas = self.betas[model_idx]
+        
+        self.classifier = RiskScoreClassifier(multiplier=multiplier, intercept=beta0, coefficients=betas)
+        y_prob = self.classifier.predict_prob(X)
+        
+        return y_prob
+    
+    
+    def predict(self, X: np.ndarray, model_idx: int=0):
+        assert self.trained, 'model not trained yet'
+        multiplier = self.multipliers[model_idx]
+        beta0 = self.beta0[model_idx]
+        betas = self.betas[model_idx]
+        
+        self.classifier = RiskScoreClassifier(multiplier=multiplier, intercept=beta0, coefficients=betas)
+        y_pred = self.classifier.predict(X)
+
+        return y_pred
+    
+    
+    def print_model_card(self, feature_names: list):     # NOTE: this is fasterrisk specific
+        assert self.classifier is not None, 'need to do prediction first!'
+        self.classifier.reset_featureNames(feature_names)
+        self.classifier.print_model_card()
+    
+    
+    def print_topK_model_cards(self, feature_names: list, X_train: np.ndarray, y_train: np.ndarray,
+                               X_test: np.ndarray, y_test: np.ndarray,  K: int=10):  
+        # NOTE: this is fasterrisk specific
+        assert type(self.betas) == list, 'model not trained yet'
+        num_models = min(K, len(self.multipliers))
+        
+        for model_index in range(num_models):
+            multiplier = self.multipliers[model_index]
+            beta0 = self.beta0[model_index]
+            betas = self.betas[model_index]
+
+            tmp_classifier = RiskScoreClassifier(multiplier, beta0, betas)
+            tmp_classifier.reset_featureNames(feature_names)
+            tmp_classifier.print_model_card()
+
+            train_loss = tmp_classifier.compute_logisticLoss(X_train, y_train)
+            train_acc, train_auc = tmp_classifier.get_acc_and_auc(X_train, y_train)
+            test_acc, test_auc = tmp_classifier.get_acc_and_auc(X_test, y_test)
+
+            print("The logistic loss on the training set is {}".format(train_loss))
+            print("The training accuracy and AUC are {:.3f}% and {:.3f}".format(train_acc*100, train_auc))
+            print("The test accuracy and AUC are are {:.3f}% and {:.3f}\n".format(test_acc*100, test_auc))
+    
+
+class EBM(Model):
+    
+    def __init__(self, ModelHyperparams):
+        super().__init__(ModelHyperparams)
+
+
+if __name__ == "__main__":
+    pass
     

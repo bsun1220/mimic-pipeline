@@ -130,3 +130,7 @@ dmypy.json
 
 # Tony's trash that should not be pushed
 jupyter.sh
+.vscode
+wandb
+run.py
+run.sh
