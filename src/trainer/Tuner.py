@@ -6,8 +6,11 @@ import wandb
 import pandas as pd
 import numpy as np
 import yaml
+import sys
 from sklearn.metrics import f1_score, roc_auc_score
+from src.model.Model import FasterRisk
 from sklearn.model_selection import KFold
+from tqdm import tqdm
 SEED = 474      # use this global seed for any randomness
 # NOTE: DO NOT SET np.random.seed(474) inside MODULES, this should be done at the top level
 
@@ -45,20 +48,8 @@ def train_test_split(X: np.ndarray, y: np.ndarray, test: float=0.25):
     
 class AbstractTuner(ABC):
     
-    def __init__(self, X: np.ndarray, y: np.ndarray):
-        """
-        To initialize wandb runs and log
-
-        Parameters
-        ----------
-        config : dict
-            configuration containing the hyperparameters for model tuning
-        entity : str
-            your name for the wandb account
-        """
-        check_np(X, y)
-        self.X = X
-        self.y = y
+    def __init__(self, config: dict, KF: bool, K: int=10, test: float=0.25, entity: str='dukeds-mimic2023'):
+        pass
         
     @abstractmethod
     def tune(self):
@@ -70,11 +61,8 @@ class AbstractTuner(ABC):
 
 class FasterRiskTuner(AbstractTuner):
     
-    def __init__(self, X: np.ndarray, y: np.ndarray):
-        super().__init__(X, y)
-    
-    def tune(self, config: dict, KF: bool=False, K: int=10, test: float=0.25, entity: str='dukeds-mimic2023'):
-        from src.model.Model import FasterRisk
+    def __init__(self, config: dict, KF: bool, K: int=10, test: float = 0.25, entity: str = 'dukeds-mimic2023'):
+        super().__init__(config, KF, K, test, entity)
         wandb.init(
             entity=entity,
             project=config['project'],
@@ -93,14 +81,19 @@ class FasterRiskTuner(AbstractTuner):
         params['maxAttempts']=wandb.config.maxAttempts
         params['num_ray_search']=wandb.config.num_ray_search
         params['lineSearch_early_stop_tolerance']=wandb.config.lineSearch_early_stop_tolerance
-        
-        model = FasterRisk(ModelHyperparams=params)
-        
-        if KF == True:
+        self.params = params
+        self.KF = KF
+        self.K = K
+        self.test = test
+    
+    def tune(self, X, y):
+        if self.KF == True:
             f1_arr, auc_arr = [], []
-            kf = KFold(n_splits=K, shuffle=True, random_state=SEED)
-            for train_idx, test_idx in kf.split(self.X):
-                X_train, y_train, X_test, y_test = self.X[train_idx], self.y[train_idx], self.X[test_idx], self.y[test_idx]
+            kf = KFold(n_splits=self.K, shuffle=True, random_state=SEED)
+            
+            for train_idx, test_idx in tqdm(kf.split(X), desc='Running KFold...', file=sys.stdout):
+                X_train, y_train, X_test, y_test = X[train_idx], y[train_idx], X[test_idx], y[test_idx]
+                model = FasterRisk(ModelHyperparams=self.params)
                 model.train(X_train, y_train)
                 y_pred = model.predict(X_test)
                 f1 = f1_score(y_test, y_pred)
@@ -108,10 +101,12 @@ class FasterRiskTuner(AbstractTuner):
                 roc_auc = roc_auc_score(y_test, y_prob)
                 f1_arr.append(f1)
                 auc_arr.append(roc_auc)
+                
             wandb.log({"F1" : np.mean(f1_arr)})
             wandb.log({"ROC AUC": np.mean(auc_arr)})
         else:   # if no kfold, just do train test split
-            X_train, y_train, X_test, y_test = train_test_split(self.X, self.y, test=test)
+            model = FasterRisk(ModelHyperparams=self.params)
+            X_train, y_train, X_test, y_test = train_test_split(X, y, test=self.test)
             model.train(X_train, y_train)
             y_pred = model.predict(X_test)
             f1 = f1_score(y_test, y_pred)

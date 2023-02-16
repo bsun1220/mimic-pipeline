@@ -132,3 +132,5 @@ dmypy.json
 jupyter.sh
 .vscode
 wandb
+run.py
+run.sh
